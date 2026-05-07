@@ -215,7 +215,7 @@ const questions = [
 ];
 
 function startGame() {
-  try { playBirthdaySong(); } catch(e) {}
+  playBirthdaySong();
   document.getElementById('screen-intro').classList.add('hidden');
   document.getElementById('screen-puzzle').classList.remove('hidden');
   const img = new Image();
@@ -435,7 +435,7 @@ function checkAnswer() {
 }
 
 function winGame() {
-  try { playWinSong(); } catch(e) {}
+  playWinSong();
   document.getElementById('screen-trivia').classList.add('hidden');
   document.getElementById('screen-win').classList.remove('hidden');
   launchConfetti();
@@ -491,162 +491,156 @@ function animateConfetti() {
 }
 window.addEventListener('resize',()=>{ canvas.width=window.innerWidth; canvas.height=window.innerHeight; });
 
-// ===== CUMPLEAÑOS FELIZ - Web Audio API =====
-function playBirthdaySong() {
-  const ctx = getAudioCtx();
+// ===== AUDIO ENGINE - Safari iOS compatible =====
+// Single AudioContext, created synchronously on first user gesture
+let AC = null;
 
-  // Notas: [frecuencia, duración en beats]
-  // Cumpleaños Feliz en Do mayor
-  const BPM = 160;
-  const beat = 60 / BPM;
+function ensureAC() {
+  if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  if (AC.state === 'suspended') AC.resume();
+  return AC;
+}
+
+function playTone(freq, dur, type, vol, delay) {
+  try {
+    const ctx = ensureAC();
+    const t = ctx.currentTime + (delay || 0);
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol || 0.2, t + 0.02);
+    g.gain.setValueAtTime(vol || 0.2, t + dur - 0.03);
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    o.start(t); o.stop(t + dur + 0.01);
+  } catch(e) {}
+}
+
+function playPickSound() {
+  try {
+    const ctx = ensureAC();
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(520, t);
+    o.frequency.linearRampToValueAtTime(660, t + 0.08);
+    g.gain.setValueAtTime(0.22, t);
+    g.gain.linearRampToValueAtTime(0, t + 0.1);
+    o.start(t); o.stop(t + 0.12);
+  } catch(e) {}
+}
+
+function playDropSound() {
+  try {
+    const ctx = ensureAC();
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(780, t);
+    o.frequency.linearRampToValueAtTime(440, t + 0.1);
+    g.gain.setValueAtTime(0.18, t);
+    g.gain.linearRampToValueAtTime(0, t + 0.13);
+    o.start(t); o.stop(t + 0.15);
+  } catch(e) {}
+}
+
+function scheduleMelody(notes, bpm, type, vol, startDelay) {
+  try {
+    const ctx = ensureAC();
+    const b = 60 / bpm;
+    let t = ctx.currentTime + (startDelay || 0.05);
+    notes.forEach(([freq, dur]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(vol || 0.25, t + 0.02);
+      g.gain.setValueAtTime(vol || 0.25, t + dur*b - 0.04);
+      g.gain.linearRampToValueAtTime(0, t + dur*b);
+      o.start(t); o.stop(t + dur*b + 0.01);
+      t += dur * b;
+    });
+    return t;
+  } catch(e) { return 0; }
+}
+
+// Cumpleaños Feliz - intro suave al empezar
+function playBirthdaySong() {
   const notes = [
     [264,0.75],[264,0.25],[296,1],[264,1],[352,1],[330,2],
     [264,0.75],[264,0.25],[296,1],[264,1],[396,1],[352,2],
     [264,0.75],[264,0.25],[528,1],[440,1],[352,1],[330,1],[296,2],
     [466,0.75],[466,0.25],[440,1],[352,1],[396,1],[352,2]
   ];
-
-  let time = ctx.currentTime + 0.1;
-  notes.forEach(([freq, dur]) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, time);
-    gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(0.35, time + 0.02);
-    gain.gain.setValueAtTime(0.35, time + dur * beat - 0.05);
-    gain.gain.linearRampToValueAtTime(0, time + dur * beat);
-    osc.start(time);
-    osc.stop(time + dur * beat);
-    time += dur * beat;
-  });
+  scheduleMelody(notes, 155, 'sine', 0.28);
 }
 
-
-// ===== SONIDOS - Compatible Safari iOS =====
-// Un único AudioContext global, creado en el primer gesto del usuario
-let _audioCtx = null;
-function getAudioCtx() {
-  if (!_audioCtx) {
-    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (_audioCtx.state === 'suspended') {
-    _audioCtx.resume();
-  }
-  return _audioCtx;
-}
-
-// Inicializar el contexto en el primer toque (necesario para Safari iOS)
-document.addEventListener('touchstart', function initAudio() {
-  getAudioCtx();
-  document.removeEventListener('touchstart', initAudio);
-}, { once: true });
-document.addEventListener('click', function initAudioClick() {
-  getAudioCtx();
-  document.removeEventListener('click', initAudioClick);
-}, { once: true });
-
-function playPickSound() {
-  try {
-    const ctx = getAudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(520, ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(640, ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.25, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.12);
-    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.12);
-  } catch(e) {}
-}
-
-function playDropSound() {
-  try {
-    const ctx = getAudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(780, ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(480, ctx.currentTime + 0.1);
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.14);
-    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.14);
-  } catch(e) {}
-}
-
-// Melodía final de victoria - versión animada de Cumpleaños Feliz
+// Versión animada + fanfarria al ganar
 function playWinSong() {
   try {
-    const ctx = getAudioCtx();
+    const ctx = ensureAC();
     const BPM = 200;
     const b = 60 / BPM;
 
     // Acordes de fondo
     const chords = [
-      [[264,330,396], 4],
-      [[264,330,396], 4],
-      [[296,370,444], 4],
-      [[264,330,396], 4],
-      [[352,440,528], 4],
-      [[330,415,495], 8],
+      [[264,330,396],4],[[264,330,396],4],
+      [[296,370,444],4],[[264,330,396],4],
+      [[352,440,528],4],[[330,415,495],8],
     ];
     let ct = ctx.currentTime + 0.05;
     chords.forEach(([freqs, dur]) => {
       freqs.forEach(freq => {
-        const o = ctx.createOscillator();
-        const g = ctx.createGain();
+        const o = ctx.createOscillator(), g = ctx.createGain();
         o.connect(g); g.connect(ctx.destination);
         o.type = 'triangle';
         o.frequency.setValueAtTime(freq, ct);
         g.gain.setValueAtTime(0, ct);
-        g.gain.linearRampToValueAtTime(0.07, ct + 0.05);
-        g.gain.setValueAtTime(0.07, ct + dur*b - 0.05);
+        g.gain.linearRampToValueAtTime(0.06, ct + 0.05);
+        g.gain.setValueAtTime(0.06, ct + dur*b - 0.05);
         g.gain.linearRampToValueAtTime(0, ct + dur*b);
-        o.start(ct); o.stop(ct + dur*b);
+        o.start(ct); o.stop(ct + dur*b + 0.01);
       });
       ct += dur * b;
     });
 
-    // Melodía principal más rápida y animada
+    // Melodía principal
     const melody = [
       [264,0.75],[264,0.25],[296,1],[264,1],[352,1],[330,2],
       [264,0.75],[264,0.25],[296,1],[264,1],[396,1],[352,2],
       [264,0.75],[264,0.25],[528,1],[440,1],[352,1],[330,1],[296,2],
       [466,0.75],[466,0.25],[440,1],[352,1],[396,1],[352,2],
-      // Remate final subiendo
       [352,0.5],[396,0.5],[440,0.5],[528,1.5]
     ];
-
-    let time = ctx.currentTime + 0.05;
+    let mt = ctx.currentTime + 0.05;
     melody.forEach(([freq, dur]) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(freq, time);
-      gain.gain.setValueAtTime(0, time);
-      gain.gain.linearRampToValueAtTime(0.18, time + 0.02);
-      gain.gain.setValueAtTime(0.18, time + dur*b - 0.04);
-      gain.gain.linearRampToValueAtTime(0, time + dur*b);
-      osc.start(time); osc.stop(time + dur*b);
-      time += dur * b;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'square';
+      o.frequency.setValueAtTime(freq, mt);
+      g.gain.setValueAtTime(0, mt);
+      g.gain.linearRampToValueAtTime(0.15, mt + 0.02);
+      g.gain.setValueAtTime(0.15, mt + dur*b - 0.04);
+      g.gain.linearRampToValueAtTime(0, mt + dur*b);
+      o.start(mt); o.stop(mt + dur*b + 0.01);
+      mt += dur * b;
     });
 
     // Fanfarria final
-    const fanfare = [528, 594, 660, 792];
-    let ft = time + 0.1;
+    const fanfare = [528,594,660,792];
+    let ft = mt + 0.1;
     fanfare.forEach((freq, i) => {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
+      const o = ctx.createOscillator(), g = ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
       o.type = 'sawtooth';
       o.frequency.setValueAtTime(freq, ft);
       g.gain.setValueAtTime(0, ft);
-      g.gain.linearRampToValueAtTime(0.22, ft + 0.03);
+      g.gain.linearRampToValueAtTime(0.2, ft + 0.03);
       g.gain.linearRampToValueAtTime(0, ft + 0.35);
       o.start(ft); o.stop(ft + 0.4);
       ft += i === fanfare.length - 1 ? 0 : 0.18;
