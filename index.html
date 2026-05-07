@@ -493,7 +493,7 @@ window.addEventListener('resize',()=>{ canvas.width=window.innerWidth; canvas.he
 
 // ===== CUMPLEAÑOS FELIZ - Web Audio API =====
 function playBirthdaySong() {
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const ctx = getAudioCtx();
 
   // Notas: [frecuencia, duración en beats]
   // Cumpleaños Feliz en Do mayor
@@ -525,12 +525,32 @@ function playBirthdaySong() {
 }
 
 
-// ===== SONIDOS =====
+// ===== SONIDOS - Compatible Safari iOS =====
+// Un único AudioContext global, creado en el primer gesto del usuario
+let _audioCtx = null;
+function getAudioCtx() {
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (_audioCtx.state === 'suspended') {
+    _audioCtx.resume();
+  }
+  return _audioCtx;
+}
 
-// Sonido al pulsar pieza (seleccionar)
+// Inicializar el contexto en el primer toque (necesario para Safari iOS)
+document.addEventListener('touchstart', function initAudio() {
+  getAudioCtx();
+  document.removeEventListener('touchstart', initAudio);
+}, { once: true });
+document.addEventListener('click', function initAudioClick() {
+  getAudioCtx();
+  document.removeEventListener('click', initAudioClick);
+}, { once: true });
+
 function playPickSound() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
@@ -543,10 +563,9 @@ function playPickSound() {
   } catch(e) {}
 }
 
-// Sonido al soltar/intercambiar pieza
 function playDropSound() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
@@ -562,7 +581,7 @@ function playDropSound() {
 // Melodía final de victoria - versión animada de Cumpleaños Feliz
 function playWinSong() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
     const BPM = 200;
     const b = 60 / BPM;
 
